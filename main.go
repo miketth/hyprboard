@@ -39,11 +39,10 @@ func run() error {
 	}
 	defer client.Close()
 
-	hyprctl, err := hyprland.ConnectHyprctl()
+	hyprctl, err := hyprland.NewHyprctl()
 	if err != nil {
 		return fmt.Errorf("connect hyprctl: %w", err)
 	}
-	defer hyprctl.Close()
 
 	sw := hyprboard.NewSwitcher(client, hyprctl, registry)
 

@@ -28,10 +28,10 @@ func (c *Client) ReadLine() (string, error) {
 }
 
 func Connect() (*Client, error) {
-	conn, reader, err := connect(Socket2)
+	conn, err := connect(Socket2)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
 
-	return &Client{conn: conn, reader: reader}, nil
+	return &Client{conn: conn, reader: bufio.NewReader(conn)}, nil
 }

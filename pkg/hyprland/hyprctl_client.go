@@ -1,66 +1,52 @@
 package hyprland
 
 import (
-	"bufio"
+	"bytes"
 	"codeberg.org/miketth/hyprboard/pkg/hyprboard"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
 	"net"
-	"syscall"
 )
 
-type Hyprctl struct {
-	conn   net.Conn
-	reader *bufio.Reader
-}
+type Hyprctl struct{}
 
-func (c *Hyprctl) Close() error {
-	return c.conn.Close()
-}
-
-func ConnectHyprctl() (*Hyprctl, error) {
-	conn, reader, err := connect(Hyperctl)
-	if err != nil {
-		return nil, fmt.Errorf("connect: %w", err)
-	}
-
-	return &Hyprctl{conn: conn, reader: reader}, nil
+func NewHyprctl() (*Hyprctl, error) {
+	return &Hyprctl{}, nil
 }
 
 func (c *Hyprctl) SwitchToLayout(keyboard string, idx int) error {
-	err := c.makeRequest(fmt.Sprintf("switchxkblayout %s %d", keyboard, idx), "")
+	conn, err := c.makeRequest(fmt.Sprintf("switchxkblayout %s %d", keyboard, idx), "")
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 
-	resp, err := c.readResponse()
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, conn)
 	if err != nil {
 		return fmt.Errorf("read response from hyprctl socket: %w", err)
 	}
 
-	str := string(resp)
-	if str != "ok" {
-		return fmt.Errorf("hyprctl: %s", str)
+	if buf.String() != "ok" {
+		return fmt.Errorf("hyprctl: %s", buf.String())
 	}
 
 	return nil
 }
 
 func (c *Hyprctl) GetKeyboards() ([]hyprboard.Keyboard, error) {
-	err := c.makeRequest("devices", "j")
+	conn, err := c.makeRequest("devices", "j")
 	if err != nil {
 		return nil, err
 	}
+	defer conn.Close()
 
-	resp, err := c.readResponse()
-	if err != nil {
-		return nil, fmt.Errorf("read response from hyprctl socket: %w", err)
-	}
+	dec := json.NewDecoder(conn)
 
 	var devs devices
-	if err := json.Unmarshal(resp, &devs); err != nil {
-		return nil, fmt.Errorf("unmarshal devices: %w, (hyprctl: %s)", err, string(resp))
+	if err := dec.Decode(&devs); err != nil {
+		return nil, fmt.Errorf("unmarshal devices: %w", err)
 	}
 
 	keyboards := devs.Keyboards
@@ -72,48 +58,28 @@ func (c *Hyprctl) GetKeyboards() ([]hyprboard.Keyboard, error) {
 	return out, nil
 }
 
-func (c *Hyprctl) makeRequest(request string, args string) error {
-	_, err := c.conn.Write([]byte(fmt.Sprintf("%s/%s", args, request)))
-	if errors.Is(err, syscall.EPIPE) { // broken pipe
-		err = c.reconnect()
-		if err != nil {
-			return fmt.Errorf("reconnect: %w", err)
-		}
-
-		_, err = c.conn.Write([]byte(fmt.Sprintf("%s/%s", args, request)))
-	}
+func (c *Hyprctl) makeRequest(request string, args string) (net.Conn, error) {
+	conn, err := connect(Hyperctl)
+	_, err = conn.Write([]byte(fmt.Sprintf("%s/%s", args, request)))
 	if err != nil {
-		return fmt.Errorf("write to hyprctl socket: %w", err)
+		return nil, fmt.Errorf("write to hyprctl socket: %w", err)
 	}
 
-	return nil
-}
-
-func (c *Hyprctl) reconnect() error {
-	_ = c.conn.Close()
-	conn, reader, err := connect(Hyperctl)
-	if err != nil {
-		return err
-	}
-
-	c.conn = conn
-	c.reader = reader
-
-	return nil
+	return conn, nil
 }
 
 const readBufferSize = 8192
 
-func (c *Hyprctl) readResponse() ([]byte, error) {
+func readResponse(reader io.Reader) ([]byte, error) {
 	buf := make([]byte, readBufferSize)
-	n, err := c.reader.Read(buf)
+	n, err := reader.Read(buf)
 	if err != nil {
 		return nil, fmt.Errorf("read from hyprctl socket: %w", err)
 	}
 
 	for n == readBufferSize {
 		tmpBuf := make([]byte, readBufferSize)
-		tmpN, err := c.reader.Read(tmpBuf)
+		tmpN, err := reader.Read(tmpBuf)
 		if err != nil {
 			return nil, fmt.Errorf("chunked read from hyprctl socket: %w", err)
 		}

@@ -1,24 +1,23 @@
 package hyprland
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"os"
 )
 
-func connect(sock socketType) (net.Conn, *bufio.Reader, error) {
+func connect(sock socketType) (net.Conn, error) {
 	socketPath, err := getSocketPath(sock)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get socket path: %w", err)
+		return nil, fmt.Errorf("get socket path: %w", err)
 	}
 
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("dial: %w", err)
+		return nil, fmt.Errorf("dial: %w", err)
 	}
 
-	return conn, bufio.NewReader(conn), nil
+	return conn, nil
 }
 
 type socketType int
