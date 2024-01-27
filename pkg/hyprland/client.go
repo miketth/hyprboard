@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 )
 
@@ -29,24 +28,10 @@ func (c *Client) ReadLine() (string, error) {
 }
 
 func Connect() (*Client, error) {
-	socketPath, err := GetSocketPath()
+	conn, reader, err := connect(Socket2)
 	if err != nil {
-		return nil, fmt.Errorf("get socket path: %w", err)
+		return nil, fmt.Errorf("connect: %w", err)
 	}
 
-	conn, err := net.Dial("unix", socketPath)
-	if err != nil {
-		return nil, fmt.Errorf("dial: %w", err)
-	}
-
-	return &Client{conn: conn, reader: bufio.NewReader(conn)}, nil
-}
-
-func GetSocketPath() (string, error) {
-	signature := os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
-	if signature == "" {
-		return "", fmt.Errorf("HYPRLAND_INSTANCE_SIGNATURE is not set, %w", ErrNotRunning)
-	}
-
-	return fmt.Sprintf("/tmp/hypr/%s/.socket2.sock", signature), nil
+	return &Client{conn: conn, reader: reader}, nil
 }

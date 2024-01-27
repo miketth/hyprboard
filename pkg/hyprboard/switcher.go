@@ -49,7 +49,10 @@ func (s *Switcher) ProcessLines(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case line := <-resultCh:
-			s.processLine(line)
+			err := s.processLine(line)
+			if err != nil {
+				return fmt.Errorf("process line: %w", err)
+			}
 		case err := <-errCh:
 			return fmt.Errorf("get line: %w", err)
 		}
