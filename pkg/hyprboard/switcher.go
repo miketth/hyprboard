@@ -72,7 +72,6 @@ func (s *Switcher) processLine(line string) error {
 		return s.processLayoutChange(evData)
 	case "activewindow":
 		return s.processWindowChange(evData)
-		// todo handle keyboard changes
 	}
 
 	return nil
