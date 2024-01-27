@@ -4,6 +4,7 @@ import (
 	"codeberg.org/miketth/hyprboard/pkg/xkblayouts"
 	"context"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -153,7 +154,7 @@ func (s *Switcher) processWindowChange(data string) error {
 
 	for device, layout := range newLayout {
 		if err := s.switcher.SwitchToLayout(device, layout); err != nil {
-			return fmt.Errorf("switch layout: %w", err)
+			log.Printf("switch layout: %v", err)
 		}
 	}
 

@@ -51,12 +51,12 @@ func run() error {
 	// don't care about errors here; people might not be using systemd
 	_, _ = daemon.SdNotify(false, daemon.SdNotifyReady)
 
-	fmt.Println("started hyprboard")
+	log.Println("started hyprboard")
 
 	for {
 		err = sw.ProcessLines(ctx)
 		if errors.Is(err, context.Canceled) {
-			fmt.Println("exiting gracefully...")
+			log.Println("exiting gracefully...")
 			return nil
 		}
 		if err != nil {
