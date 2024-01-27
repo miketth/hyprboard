@@ -1,9 +1,9 @@
 package hyprboard
 
 import (
+	"codeberg.org/miketth/hyprboard/pkg/xkblayouts"
 	"context"
 	"fmt"
-	"github.com/miketth/hyprboard/pkg/xkblayouts"
 	"strings"
 )
 

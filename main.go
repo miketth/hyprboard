@@ -1,13 +1,13 @@
 package main
 
 import (
+	"codeberg.org/miketth/hyprboard/pkg/hyprboard"
+	"codeberg.org/miketth/hyprboard/pkg/hyprland"
+	"codeberg.org/miketth/hyprboard/pkg/xkblayouts"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/miketth/hyprboard/pkg/hyprboard"
-	"github.com/miketth/hyprboard/pkg/hyprland"
-	"github.com/miketth/hyprboard/pkg/xkblayouts"
 	"log"
 	"os"
 	"os/signal"

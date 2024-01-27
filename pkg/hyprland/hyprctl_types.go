@@ -1,7 +1,7 @@
 package hyprland
 
 import (
-	"github.com/miketth/hyprboard/pkg/hyprboard"
+	"codeberg.org/miketth/hyprboard/pkg/hyprboard"
 	"strings"
 )
 

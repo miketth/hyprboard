@@ -1,4 +1,4 @@
-module github.com/miketth/hyprboard
+module codeberg.org/miketth/hyprboard
 
 go 1.21
 

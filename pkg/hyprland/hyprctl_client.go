@@ -2,10 +2,10 @@ package hyprland
 
 import (
 	"bufio"
+	"codeberg.org/miketth/hyprboard/pkg/hyprboard"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/miketth/hyprboard/pkg/hyprboard"
 	"net"
 	"syscall"
 )
