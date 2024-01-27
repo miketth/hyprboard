@@ -90,6 +90,7 @@ func (c *Hyprctl) makeRequest(request string, args string) error {
 }
 
 func (c *Hyprctl) reconnect() error {
+	_ = c.conn.Close()
 	conn, reader, err := connect(Hyperctl)
 	if err != nil {
 		return err
