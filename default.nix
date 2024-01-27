@@ -4,5 +4,5 @@
 buildGoModule {
     name = "hyprboard";
     src = ./.;
-    vendorHash = null;
+    vendorHash = "sha256-SW1ZeVBJKMWMK3UMq5N+VKhILnusTVdYuIQW26/iRYU=";
 }

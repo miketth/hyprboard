@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/coreos/go-systemd/v22/daemon"
 	"log"
 	"os"
 	"os/signal"
@@ -45,6 +46,12 @@ func run() error {
 	}
 
 	sw := hyprboard.NewSwitcher(client, hyprctl, registry)
+
+	// notify systemd that we're ready
+	// don't care about errors here; people might not be using systemd
+	_, _ = daemon.SdNotify(false, daemon.SdNotifyReady)
+
+	fmt.Println("started hyprboard")
 
 	for {
 		err = sw.ProcessLines(ctx)
