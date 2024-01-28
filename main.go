@@ -53,14 +53,14 @@ func run() error {
 
 	log.Println("started hyprboard")
 
-	for {
-		err = sw.ProcessLines(ctx)
-		if errors.Is(err, context.Canceled) {
-			log.Println("exiting gracefully...")
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("process lines: %w", err)
-		}
+	err = sw.ProcessLines(ctx)
+	if errors.Is(err, context.Canceled) {
+		log.Println("exiting gracefully...")
+		return nil
 	}
+	if err != nil {
+		return fmt.Errorf("process lines: %w", err)
+	}
+
+	return nil
 }
