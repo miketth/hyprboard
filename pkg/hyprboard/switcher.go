@@ -9,8 +9,8 @@ import (
 )
 
 type Switcher struct {
-	activeLayouts  map[string]map[string]int
-	layoutIdxCache map[string]map[string]int
+	activeLayouts  map[string]map[string]Layout
+	layoutIdxCache map[string]map[Layout]int
 	activeWindow   string
 
 	listener        EventListener
@@ -24,8 +24,8 @@ func NewSwitcher(
 	possibleLayouts *xkblayouts.XkbConfigRegistry,
 ) *Switcher {
 	return &Switcher{
-		activeLayouts:   make(map[string]map[string]int),
-		layoutIdxCache:  make(map[string]map[string]int),
+		activeLayouts:   make(map[string]map[string]Layout),
+		layoutIdxCache:  make(map[string]map[Layout]int),
 		activeWindow:    "",
 		listener:        listener,
 		switcher:        switcher,
@@ -86,31 +86,28 @@ func (s *Switcher) processLayoutChange(data string) error {
 	}
 
 	keyboardName := dataParts[0]
-	layout := strings.Join(dataParts[1:], ",")
+	layoutName := strings.Join(dataParts[1:], ",")
 
-	idx, err := s.getLayoutIndexForDevice(keyboardName, layout)
-	if err != nil {
-		return fmt.Errorf("get layout index: %w", err)
+	// get layout code and variant code
+	layoutCode, variantCode := s.possibleLayouts.GetLayoutAndVariantFromPrettyName(layoutName)
+	if layoutCode == "" {
+		return fmt.Errorf("layout %q not found", layoutName)
 	}
+
+	layout := Layout{Code: layoutCode, Variant: variantCode}
 
 	if s.activeLayouts[s.activeWindow] == nil {
-		s.activeLayouts[s.activeWindow] = make(map[string]int)
+		s.activeLayouts[s.activeWindow] = make(map[string]Layout)
 	}
 
-	s.activeLayouts[s.activeWindow][keyboardName] = idx
+	s.activeLayouts[s.activeWindow][keyboardName] = layout
 	return nil
 }
 
-func (s *Switcher) getLayoutIndexForDevice(device, layout string) (int, error) {
+func (s *Switcher) getLayoutIndexForDevice(device string, layout Layout) (int, error) {
 	// get it from cache if possible
 	if idx, ok := s.layoutIdxCache[device][layout]; ok {
 		return idx, nil
-	}
-
-	// get layout code and variant code
-	layoutCode, variantCode := s.possibleLayouts.GetLayoutAndVariantFromPrettyName(layout)
-	if layoutCode == "" {
-		return -1, fmt.Errorf("layout %q not found", layout)
 	}
 
 	// get device keyboards
@@ -131,10 +128,10 @@ func (s *Switcher) getLayoutIndexForDevice(device, layout string) (int, error) {
 	}
 
 	for i := range keyboard.Layouts {
-		layout, variant := keyboard.Layouts[i], keyboard.Variants[i]
-		if layout == layoutCode && variant == variantCode {
+		thisLayout, thisVariant := keyboard.Layouts[i], keyboard.Variants[i]
+		if thisLayout == layout.Code && thisVariant == layout.Variant {
 			if s.layoutIdxCache[device] == nil {
-				s.layoutIdxCache[device] = make(map[string]int)
+				s.layoutIdxCache[device] = make(map[Layout]int)
 			}
 
 			s.layoutIdxCache[device][layout] = i
@@ -153,7 +150,12 @@ func (s *Switcher) processWindowChange(data string) error {
 	}
 
 	for device, layout := range newLayout {
-		if err := s.switcher.SwitchToLayout(device, layout); err != nil {
+		idx, err := s.getLayoutIndexForDevice(device, layout)
+		if err != nil {
+			return fmt.Errorf("get layout index: %w", err)
+		}
+
+		if err := s.switcher.SwitchToLayout(device, idx); err != nil {
 			log.Printf("switch layout: %v", err)
 		}
 	}

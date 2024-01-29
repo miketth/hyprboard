@@ -14,3 +14,8 @@ type Keyboard struct {
 	Layouts  []string
 	Variants []string
 }
+
+type Layout struct {
+	Code    string
+	Variant string
+}
