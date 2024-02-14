@@ -3,6 +3,7 @@ package main
 import (
 	"codeberg.org/miketth/hyprboard/pkg/hyprboard"
 	"codeberg.org/miketth/hyprboard/pkg/hyprland"
+	"codeberg.org/miketth/hyprboard/pkg/layoutstore/json"
 	"codeberg.org/miketth/hyprboard/pkg/xkblayouts"
 	"context"
 	"errors"
@@ -16,7 +17,11 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	err := run()
+	switch {
+	case errors.Is(err, context.Canceled):
+		return
+	case err != nil:
 		log.Fatalf("error: %+v", err)
 	}
 }
@@ -45,7 +50,24 @@ func run() error {
 		return fmt.Errorf("connect hyprctl: %w", err)
 	}
 
-	sw := hyprboard.NewSwitcher(client, hyprctl, registry)
+	errChan := make(chan error)
+
+	configPath, err := getConfigDir()
+	if err != nil {
+		return fmt.Errorf("get config dir: %w", err)
+	}
+	layoutStore, err := json.NewLayoutStore(configPath + "/layouts.json")
+	if err != nil {
+		return fmt.Errorf("create layout store: %w", err)
+	}
+	go func() {
+		err := layoutStore.SaveLooper(ctx)
+		if err != nil {
+			errChan <- fmt.Errorf("save looper: %w", err)
+		}
+	}()
+
+	sw := hyprboard.NewSwitcher(client, hyprctl, registry, layoutStore)
 
 	// notify systemd that we're ready
 	// don't care about errors here; people might not be using systemd
@@ -53,14 +75,26 @@ func run() error {
 
 	log.Println("started hyprboard")
 
-	err = sw.ProcessLines(ctx)
-	if errors.Is(err, context.Canceled) {
-		log.Println("exiting gracefully...")
-		return nil
-	}
+	go func() {
+		err := sw.ProcessLines(ctx)
+		if err != nil {
+			errChan <- fmt.Errorf("process lines: %w", err)
+		}
+	}()
+	return <-errChan
+}
+
+func getConfigDir() (string, error) {
+	dir, err := os.UserConfigDir()
 	if err != nil {
-		return fmt.Errorf("process lines: %w", err)
+		return "", fmt.Errorf("get user config dir: %w", err)
 	}
 
-	return nil
+	hyprboardConfigDir := dir + "/hyprboard"
+	err = os.MkdirAll(hyprboardConfigDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("create hyprboard config dir: %w", err)
+	}
+
+	return hyprboardConfigDir, nil
 }

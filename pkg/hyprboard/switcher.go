@@ -9,7 +9,7 @@ import (
 )
 
 type Switcher struct {
-	activeLayouts  map[string]map[string]Layout
+	activeLayouts  ActiveLayoutStore
 	layoutIdxCache map[string]map[Layout]int
 	activeWindow   string
 
@@ -22,9 +22,10 @@ func NewSwitcher(
 	listener EventListener,
 	switcher KeyboardLayoutSwitcher,
 	possibleLayouts *xkblayouts.XkbConfigRegistry,
+	activeLayoutStore ActiveLayoutStore,
 ) *Switcher {
 	return &Switcher{
-		activeLayouts:   make(map[string]map[string]Layout),
+		activeLayouts:   activeLayoutStore,
 		layoutIdxCache:  make(map[string]map[Layout]int),
 		activeWindow:    "",
 		listener:        listener,
@@ -96,11 +97,11 @@ func (s *Switcher) processLayoutChange(data string) error {
 
 	layout := Layout{Code: layoutCode, Variant: variantCode}
 
-	if s.activeLayouts[s.activeWindow] == nil {
-		s.activeLayouts[s.activeWindow] = make(map[string]Layout)
+	err := s.activeLayouts.SetActiveLayout(s.activeWindow, keyboardName, layout)
+	if err != nil {
+		return fmt.Errorf("save active layout: %w", err)
 	}
 
-	s.activeLayouts[s.activeWindow][keyboardName] = layout
 	return nil
 }
 
@@ -144,8 +145,11 @@ func (s *Switcher) getLayoutIndexForDevice(device string, layout Layout) (int, e
 
 func (s *Switcher) processWindowChange(data string) error {
 	s.activeWindow = strings.Split(data, ",")[0]
-	newLayout, found := s.activeLayouts[s.activeWindow]
-	if !found {
+	newLayout, err := s.activeLayouts.GetActiveLayout(s.activeWindow)
+	if err != nil {
+		return fmt.Errorf("get active layout: %w", err)
+	}
+	if newLayout == nil {
 		return nil
 	}
 

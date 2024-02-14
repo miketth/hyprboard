@@ -19,3 +19,8 @@ type Layout struct {
 	Code    string
 	Variant string
 }
+
+type ActiveLayoutStore interface {
+	GetActiveLayout(window string) (map[string]Layout, error)
+	SetActiveLayout(window string, keyboard string, layout Layout) error
+}
