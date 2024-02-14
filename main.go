@@ -13,16 +13,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
 
 func main() {
 	err := run()
-	switch {
-	case errors.Is(err, context.Canceled):
-		return
-	case err != nil:
+	if err != nil {
 		log.Fatalf("error: %+v", err)
 	}
 }
@@ -51,8 +49,6 @@ func run() error {
 		return fmt.Errorf("connect hyprctl: %w", err)
 	}
 
-	errChan := make(chan error)
-
 	configPath, err := getConfigDir()
 	if err != nil {
 		return fmt.Errorf("get config dir: %w", err)
@@ -66,7 +62,12 @@ func run() error {
 
 	log.Println("started hyprboard")
 
+	errChan := make(chan error, 3)
+	var wg sync.WaitGroup
+	wg.Add(3)
+
 	go func() {
+		defer wg.Done()
 		err := sw.ProcessLines(ctx)
 		if err != nil {
 			errChan <- fmt.Errorf("process lines: %w", err)
@@ -74,6 +75,7 @@ func run() error {
 	}()
 
 	go func() {
+		defer wg.Done()
 		err := layoutStore.SaveLooper(ctx)
 		if err != nil {
 			errChan <- fmt.Errorf("save looper: %w", err)
@@ -81,13 +83,24 @@ func run() error {
 	}()
 
 	go func() {
+		defer wg.Done()
 		err := systemdNotifyLoop(ctx)
 		if err != nil {
 			errChan <- fmt.Errorf("systemd notify: %w", err)
 		}
 	}()
 
-	return <-errChan
+	err = <-errChan
+	switch {
+	case errors.Is(err, context.Canceled):
+		log.Println("shutting down")
+		wg.Wait()
+		return nil
+	case err != nil:
+		return err
+	}
+
+	return nil
 }
 
 func systemdNotifyLoop(ctx context.Context) error {
