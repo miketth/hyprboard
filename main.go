@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -60,18 +61,8 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create layout store: %w", err)
 	}
-	go func() {
-		err := layoutStore.SaveLooper(ctx)
-		if err != nil {
-			errChan <- fmt.Errorf("save looper: %w", err)
-		}
-	}()
 
 	sw := hyprboard.NewSwitcher(client, hyprctl, registry, layoutStore)
-
-	// notify systemd that we're ready
-	// don't care about errors here; people might not be using systemd
-	_, _ = daemon.SdNotify(false, daemon.SdNotifyReady)
 
 	log.Println("started hyprboard")
 
@@ -81,7 +72,59 @@ func run() error {
 			errChan <- fmt.Errorf("process lines: %w", err)
 		}
 	}()
+
+	go func() {
+		err := layoutStore.SaveLooper(ctx)
+		if err != nil {
+			errChan <- fmt.Errorf("save looper: %w", err)
+		}
+	}()
+
+	go func() {
+		err := systemdNotifyLoop(ctx)
+		if err != nil {
+			errChan <- fmt.Errorf("systemd notify: %w", err)
+		}
+	}()
+
 	return <-errChan
+}
+
+func systemdNotifyLoop(ctx context.Context) error {
+	// tell systemd that we're ready
+	supported, err := daemon.SdNotify(false, daemon.SdNotifyReady)
+	if err != nil {
+		return fmt.Errorf("notify systemd: %w", err)
+	}
+	if !supported {
+		return nil
+	}
+
+	// set funky message
+	_, _ = daemon.SdNotify(false, "STATUS=Wildly switching keyboard layouts! 🤖")
+
+	// notify watchdog
+	t, err := daemon.SdWatchdogEnabled(false)
+	if err != nil {
+		return fmt.Errorf("check watchdog: %w", err)
+	}
+	// if watchdog is not enabled, we don't need to notify it
+	if t == 0 {
+		return nil
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case <-time.After(t / 2):
+			_, err := daemon.SdNotify(false, daemon.SdNotifyWatchdog)
+			if err != nil {
+				return fmt.Errorf("notify watchdog: %w", err)
+			}
+		}
+	}
 }
 
 func getConfigDir() (string, error) {
