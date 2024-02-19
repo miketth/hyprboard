@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/coreos/go-systemd/v22/daemon"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"log"
 	"os"
 	"os/signal"
@@ -27,7 +29,13 @@ func main() {
 
 func run() error {
 	evdevXmlPath := flag.String("evdev-xml-path", "/usr/share/X11/xkb/rules/evdev.xml", "path to evdev.xml")
+	debug := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
+
+	log, err := newLogger(*debug)
+	if err != nil {
+		return fmt.Errorf("create logger: %w", err)
+	}
 
 	ctx := context.Background()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -58,9 +66,9 @@ func run() error {
 		return fmt.Errorf("create layout store: %w", err)
 	}
 
-	sw := hyprboard.NewSwitcher(client, hyprctl, registry, layoutStore)
+	sw := hyprboard.NewSwitcher(client, hyprctl, registry, layoutStore, log)
 
-	log.Println("started hyprboard")
+	log.Info("started hyprboard")
 
 	errChan := make(chan error, 3)
 	var wg sync.WaitGroup
@@ -93,7 +101,7 @@ func run() error {
 	err = <-errChan
 	switch {
 	case errors.Is(err, context.Canceled):
-		log.Println("shutting down")
+		log.Info("shutting down")
 		wg.Wait()
 		return nil
 	case err != nil:
@@ -153,4 +161,18 @@ func getConfigDir() (string, error) {
 	}
 
 	return hyprboardConfigDir, nil
+}
+
+func newLogger(debug bool) (*zap.SugaredLogger, error) {
+	loggerConfig := zap.NewDevelopmentConfig()
+
+	loggerConfig.OutputPaths = []string{"stdout"}
+	loggerConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	logger, err := loggerConfig.Build()
+	if err != nil {
+		return nil, fmt.Errorf("build logger: %w", err)
+	}
+
+	return logger.Sugar(), nil
 }

@@ -3,8 +3,9 @@ package hyprboard
 import (
 	"codeberg.org/miketth/hyprboard/pkg/xkblayouts"
 	"context"
+	"errors"
 	"fmt"
-	"log"
+	"go.uber.org/zap"
 	"strings"
 )
 
@@ -16,6 +17,7 @@ type Switcher struct {
 	listener        EventListener
 	switcher        KeyboardLayoutSwitcher
 	possibleLayouts *xkblayouts.XkbConfigRegistry
+	log             *zap.SugaredLogger
 }
 
 func NewSwitcher(
@@ -23,6 +25,7 @@ func NewSwitcher(
 	switcher KeyboardLayoutSwitcher,
 	possibleLayouts *xkblayouts.XkbConfigRegistry,
 	activeLayoutStore ActiveLayoutStore,
+	log *zap.SugaredLogger,
 ) *Switcher {
 	return &Switcher{
 		activeLayouts:   activeLayoutStore,
@@ -31,6 +34,7 @@ func NewSwitcher(
 		listener:        listener,
 		switcher:        switcher,
 		possibleLayouts: possibleLayouts,
+		log:             log,
 	}
 }
 
@@ -105,6 +109,11 @@ func (s *Switcher) processLayoutChange(data string) error {
 	return nil
 }
 
+var (
+	errKeyboardNotFound = errors.New("keyboard not found")
+	errLayoutNotFound   = errors.New("layout not found")
+)
+
 func (s *Switcher) getLayoutIndexForDevice(device string, layout Layout) (int, error) {
 	// get it from cache if possible
 	if idx, ok := s.layoutIdxCache[device][layout]; ok {
@@ -125,7 +134,7 @@ func (s *Switcher) getLayoutIndexForDevice(device string, layout Layout) (int, e
 		}
 	}
 	if len(keyboard.Layouts) == 0 {
-		return -1, fmt.Errorf("keyboard %q not found", device)
+		return -1, fmt.Errorf("%w (%q)", errKeyboardNotFound, device)
 	}
 
 	for i := range keyboard.Layouts {
@@ -140,7 +149,7 @@ func (s *Switcher) getLayoutIndexForDevice(device string, layout Layout) (int, e
 		}
 	}
 
-	return -1, fmt.Errorf("layout %q not found for keyboard %q", layout, keyboard.Name)
+	return -1, fmt.Errorf("%w (%q) for keyboard %q", errLayoutNotFound, layout, keyboard.Name)
 }
 
 func (s *Switcher) processWindowChange(data string) error {
@@ -155,12 +164,19 @@ func (s *Switcher) processWindowChange(data string) error {
 
 	for device, layout := range newLayout {
 		idx, err := s.getLayoutIndexForDevice(device, layout)
-		if err != nil {
+		switch {
+		case errors.Is(err, errKeyboardNotFound):
+			continue
+		case errors.Is(err, errLayoutNotFound):
+			s.log.Warnf("get layout index: %v", err)
+			continue
+		case err != nil:
 			return fmt.Errorf("get layout index: %w", err)
 		}
 
 		if err := s.switcher.SwitchToLayout(device, idx); err != nil {
-			log.Printf("switch layout: %v", err)
+			s.log.Warnf("switch layout: %v", err)
+			continue
 		}
 	}
 
