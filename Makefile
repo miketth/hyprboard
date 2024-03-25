@@ -16,3 +16,7 @@ else
 	touch $(DB_DIR)/migrations/$(NOW)_$(name).up.sql
 	touch $(DB_DIR)/migrations/$(NOW)_$(name).down.sql
 endif
+
+clean-deps:
+	go mod tidy
+	go mod vendor
