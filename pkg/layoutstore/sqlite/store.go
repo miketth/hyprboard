@@ -45,7 +45,7 @@ func (s *LayoutStore) GetActiveLayout(window string) (map[string]hyprboard.Layou
 
 	ret := make(map[string]hyprboard.Layout)
 	for _, layout := range layouts {
-		ret[layout.App] = hyprboard.Layout{
+		ret[layout.Device] = hyprboard.Layout{
 			Code:    layout.Code,
 			Variant: layout.Variant,
 		}
