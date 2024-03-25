@@ -3,7 +3,7 @@ package main
 import (
 	"codeberg.org/miketth/hyprboard/pkg/hyprboard"
 	"codeberg.org/miketth/hyprboard/pkg/hyprland"
-	"codeberg.org/miketth/hyprboard/pkg/layoutstore/json"
+	"codeberg.org/miketth/hyprboard/pkg/layoutstore/sqlite"
 	"codeberg.org/miketth/hyprboard/pkg/xkblayouts"
 	"context"
 	"errors"
@@ -61,7 +61,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("get config dir: %w", err)
 	}
-	layoutStore, err := json.NewLayoutStore(configPath + "/layouts.json")
+	layoutStore, err := sqlite.NewLayoutStore(configPath + "/layouts.db")
 	if err != nil {
 		return fmt.Errorf("create layout store: %w", err)
 	}
@@ -72,21 +72,13 @@ func run() error {
 
 	errChan := make(chan error, 3)
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
 		err := sw.ProcessLines(ctx)
 		if err != nil {
 			errChan <- fmt.Errorf("process lines: %w", err)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		err := layoutStore.SaveLooper(ctx)
-		if err != nil {
-			errChan <- fmt.Errorf("save looper: %w", err)
 		}
 	}()
 
