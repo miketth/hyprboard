@@ -3,18 +3,23 @@ package main
 import (
 	"codeberg.org/miketth/hyprboard/pkg/hyprboard"
 	"codeberg.org/miketth/hyprboard/pkg/hyprland"
+	"codeberg.org/miketth/hyprboard/pkg/layoutstore/json"
+	"codeberg.org/miketth/hyprboard/pkg/layoutstore/memory"
 	"codeberg.org/miketth/hyprboard/pkg/layoutstore/sqlite"
 	"codeberg.org/miketth/hyprboard/pkg/xkblayouts"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/adrg/xdg"
 	"github.com/coreos/go-systemd/v22/daemon"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"io"
 	"log"
 	"os"
 	"os/signal"
+	"path"
 	"sync"
 	"syscall"
 	"time"
@@ -28,7 +33,13 @@ func main() {
 }
 
 func run() error {
+	stateFileDefault, err := getStateFile()
+	if err != nil {
+		return fmt.Errorf("get state file: %w", err)
+	}
+
 	evdevXmlPath := flag.String("evdev-xml-path", "/usr/share/X11/xkb/rules/evdev.xml", "path to evdev.xml")
+	stateFile := flag.String("state-file", stateFileDefault, "path to persist state, can be *.json (JSON), *.db (sqlite), or - (memory)")
 	debug := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
 
@@ -57,13 +68,12 @@ func run() error {
 		return fmt.Errorf("connect hyprctl: %w", err)
 	}
 
-	configPath, err := getConfigDir()
-	if err != nil {
-		return fmt.Errorf("get config dir: %w", err)
-	}
-	layoutStore, err := sqlite.NewLayoutStore(configPath + "/layouts.db")
+	layoutStore, err := createLayoutStore(ctx, *stateFile)
 	if err != nil {
 		return fmt.Errorf("create layout store: %w", err)
+	}
+	if closer, ok := layoutStore.(io.Closer); ok {
+		defer closer.Close()
 	}
 
 	sw := hyprboard.NewSwitcher(client, hyprctl, registry, layoutStore, log)
@@ -103,6 +113,29 @@ func run() error {
 	return nil
 }
 
+func createLayoutStore(ctx context.Context, filename string) (hyprboard.ActiveLayoutStore, error) {
+	extension := path.Ext(filename)
+
+	var layoutStore hyprboard.ActiveLayoutStore
+	var err error
+	switch {
+	case extension == ".db":
+		layoutStore, err = sqlite.NewLayoutStore(filename)
+	case extension == ".json":
+		layoutStore, err = json.NewLayoutStore(ctx, filename)
+	case filename == "-":
+		layoutStore = memory.NewLayoutStore()
+	default:
+		err = fmt.Errorf("unknown file extension for state storage: %q", extension)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("create layout store: %w", err)
+	}
+
+	return layoutStore, nil
+}
+
 func systemdNotifyLoop(ctx context.Context) error {
 	// tell systemd that we're ready
 	supported, err := daemon.SdNotify(false, daemon.SdNotifyReady)
@@ -140,19 +173,13 @@ func systemdNotifyLoop(ctx context.Context) error {
 	}
 }
 
-func getConfigDir() (string, error) {
-	dir, err := os.UserConfigDir()
+func getStateFile() (string, error) {
+	file, err := xdg.DataFile("hyprboard/data.db")
 	if err != nil {
-		return "", fmt.Errorf("get user config dir: %w", err)
+		return "", fmt.Errorf("get data dir: %w", err)
 	}
 
-	hyprboardConfigDir := dir + "/hyprboard"
-	err = os.MkdirAll(hyprboardConfigDir, 0755)
-	if err != nil {
-		return "", fmt.Errorf("create hyprboard config dir: %w", err)
-	}
-
-	return hyprboardConfigDir, nil
+	return file, nil
 }
 
 func newLogger(debug bool) (*zap.SugaredLogger, error) {
@@ -160,6 +187,11 @@ func newLogger(debug bool) (*zap.SugaredLogger, error) {
 
 	loggerConfig.OutputPaths = []string{"stdout"}
 	loggerConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	if debug {
+		loggerConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
+	} else {
+		loggerConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+	}
 
 	logger, err := loggerConfig.Build()
 	if err != nil {

@@ -17,7 +17,7 @@ type LayoutStore struct {
 	dirty   bool
 }
 
-func NewLayoutStore(filename string) (*LayoutStore, error) {
+func NewLayoutStore(ctx context.Context, filename string) (*LayoutStore, error) {
 	fileExists := true
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -43,6 +43,8 @@ func NewLayoutStore(filename string) (*LayoutStore, error) {
 
 		store.dirty = false
 	}
+
+	go store.saveLooper(ctx)
 
 	return store, nil
 }
@@ -97,7 +99,7 @@ func (s *LayoutStore) save() error {
 	return nil
 }
 
-func (s *LayoutStore) SaveLooper(ctx context.Context) error {
+func (s *LayoutStore) saveLooper(ctx context.Context) error {
 	defer s.file.Close()
 
 	for {
