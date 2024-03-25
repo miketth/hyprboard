@@ -2,10 +2,12 @@ package sqlite
 
 import (
 	"codeberg.org/miketth/hyprboard/pkg/hyprboard"
+	"codeberg.org/miketth/hyprboard/pkg/layoutstore/sqlite/migrations"
 	"context"
 	"database/sql"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"go.uber.org/zap"
 )
 
 type LayoutStore struct {
@@ -13,13 +15,13 @@ type LayoutStore struct {
 	querier *Queries
 }
 
-func NewLayoutStore(filename string) (*LayoutStore, error) {
+func NewLayoutStore(filename string, log *zap.SugaredLogger) (*LayoutStore, error) {
 	db, err := sql.Open("sqlite3", filename)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 
-	if err := createSchema(db); err != nil {
+	if err := migrations.Migrate(db, log); err != nil {
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
 

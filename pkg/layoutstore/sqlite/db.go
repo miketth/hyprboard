@@ -24,6 +24,12 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
+	if q.dumpRestStmt, err = db.PrepareContext(ctx, dumpRest); err != nil {
+		return nil, fmt.Errorf("error preparing query DumpRest: %w", err)
+	}
+	if q.dumpTablesStmt, err = db.PrepareContext(ctx, dumpTables); err != nil {
+		return nil, fmt.Errorf("error preparing query DumpTables: %w", err)
+	}
 	if q.getLayoutsForAppStmt, err = db.PrepareContext(ctx, getLayoutsForApp); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLayoutsForApp: %w", err)
 	}
@@ -35,6 +41,16 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 
 func (q *Queries) Close() error {
 	var err error
+	if q.dumpRestStmt != nil {
+		if cerr := q.dumpRestStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing dumpRestStmt: %w", cerr)
+		}
+	}
+	if q.dumpTablesStmt != nil {
+		if cerr := q.dumpTablesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing dumpTablesStmt: %w", cerr)
+		}
+	}
 	if q.getLayoutsForAppStmt != nil {
 		if cerr := q.getLayoutsForAppStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getLayoutsForAppStmt: %w", cerr)
@@ -84,6 +100,8 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 type Queries struct {
 	db                   DBTX
 	tx                   *sql.Tx
+	dumpRestStmt         *sql.Stmt
+	dumpTablesStmt       *sql.Stmt
 	getLayoutsForAppStmt *sql.Stmt
 	setLayoutStmt        *sql.Stmt
 }
@@ -92,6 +110,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
 		db:                   tx,
 		tx:                   tx,
+		dumpRestStmt:         q.dumpRestStmt,
+		dumpTablesStmt:       q.dumpTablesStmt,
 		getLayoutsForAppStmt: q.getLayoutsForAppStmt,
 		setLayoutStmt:        q.setLayoutStmt,
 	}

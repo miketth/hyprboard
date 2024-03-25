@@ -68,7 +68,7 @@ func run() error {
 		return fmt.Errorf("connect hyprctl: %w", err)
 	}
 
-	layoutStore, err := createLayoutStore(ctx, *stateFile)
+	layoutStore, err := createLayoutStore(ctx, *stateFile, log)
 	if err != nil {
 		return fmt.Errorf("create layout store: %w", err)
 	}
@@ -113,14 +113,14 @@ func run() error {
 	return nil
 }
 
-func createLayoutStore(ctx context.Context, filename string) (hyprboard.ActiveLayoutStore, error) {
+func createLayoutStore(ctx context.Context, filename string, log *zap.SugaredLogger) (hyprboard.ActiveLayoutStore, error) {
 	extension := path.Ext(filename)
 
 	var layoutStore hyprboard.ActiveLayoutStore
 	var err error
 	switch {
 	case extension == ".db":
-		layoutStore, err = sqlite.NewLayoutStore(filename)
+		layoutStore, err = sqlite.NewLayoutStore(filename, log)
 	case extension == ".json":
 		layoutStore, err = json.NewLayoutStore(ctx, filename)
 	case filename == "-":

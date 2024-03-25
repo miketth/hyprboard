@@ -12,3 +12,16 @@ type LastLayout struct {
 	Code    string
 	Variant string
 }
+
+type SchemaMigration struct {
+	Version interface{}
+	Dirty   *bool
+}
+
+type SqliteMaster struct {
+	Type     *string
+	Name     *string
+	TblName  *string
+	Rootpage *int64
+	Sql      *string
+}
