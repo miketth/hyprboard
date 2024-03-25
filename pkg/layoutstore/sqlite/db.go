@@ -7,6 +7,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
 
 type DBTX interface {
@@ -20,12 +21,78 @@ func New(db DBTX) *Queries {
 	return &Queries{db: db}
 }
 
+func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
+	q := Queries{db: db}
+	var err error
+	if q.getLayoutsForAppStmt, err = db.PrepareContext(ctx, getLayoutsForApp); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLayoutsForApp: %w", err)
+	}
+	if q.setLayoutStmt, err = db.PrepareContext(ctx, setLayout); err != nil {
+		return nil, fmt.Errorf("error preparing query SetLayout: %w", err)
+	}
+	return &q, nil
+}
+
+func (q *Queries) Close() error {
+	var err error
+	if q.getLayoutsForAppStmt != nil {
+		if cerr := q.getLayoutsForAppStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLayoutsForAppStmt: %w", cerr)
+		}
+	}
+	if q.setLayoutStmt != nil {
+		if cerr := q.setLayoutStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setLayoutStmt: %w", cerr)
+		}
+	}
+	return err
+}
+
+func (q *Queries) exec(ctx context.Context, stmt *sql.Stmt, query string, args ...interface{}) (sql.Result, error) {
+	switch {
+	case stmt != nil && q.tx != nil:
+		return q.tx.StmtContext(ctx, stmt).ExecContext(ctx, args...)
+	case stmt != nil:
+		return stmt.ExecContext(ctx, args...)
+	default:
+		return q.db.ExecContext(ctx, query, args...)
+	}
+}
+
+func (q *Queries) query(ctx context.Context, stmt *sql.Stmt, query string, args ...interface{}) (*sql.Rows, error) {
+	switch {
+	case stmt != nil && q.tx != nil:
+		return q.tx.StmtContext(ctx, stmt).QueryContext(ctx, args...)
+	case stmt != nil:
+		return stmt.QueryContext(ctx, args...)
+	default:
+		return q.db.QueryContext(ctx, query, args...)
+	}
+}
+
+func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, args ...interface{}) *sql.Row {
+	switch {
+	case stmt != nil && q.tx != nil:
+		return q.tx.StmtContext(ctx, stmt).QueryRowContext(ctx, args...)
+	case stmt != nil:
+		return stmt.QueryRowContext(ctx, args...)
+	default:
+		return q.db.QueryRowContext(ctx, query, args...)
+	}
+}
+
 type Queries struct {
-	db DBTX
+	db                   DBTX
+	tx                   *sql.Tx
+	getLayoutsForAppStmt *sql.Stmt
+	setLayoutStmt        *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db: tx,
+		db:                   tx,
+		tx:                   tx,
+		getLayoutsForAppStmt: q.getLayoutsForAppStmt,
+		setLayoutStmt:        q.setLayoutStmt,
 	}
 }

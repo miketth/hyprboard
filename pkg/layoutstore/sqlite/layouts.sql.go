@@ -16,7 +16,7 @@ where app = ?
 `
 
 func (q *Queries) GetLayoutsForApp(ctx context.Context, app string) ([]LastLayout, error) {
-	rows, err := q.db.QueryContext(ctx, getLayoutsForApp, app)
+	rows, err := q.query(ctx, q.getLayoutsForAppStmt, getLayoutsForApp, app)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ type SetLayoutParams struct {
 }
 
 func (q *Queries) SetLayout(ctx context.Context, arg SetLayoutParams) error {
-	_, err := q.db.ExecContext(ctx, setLayout,
+	_, err := q.exec(ctx, q.setLayoutStmt, setLayout,
 		arg.App,
 		arg.Device,
 		arg.Code,
