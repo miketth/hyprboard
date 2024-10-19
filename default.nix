@@ -1,8 +1,7 @@
-{ lib
-, buildGoModule
-}:
+{ buildGoModule }:
 buildGoModule {
-    name = "hyprboard";
-    src = ./.;
-    vendorHash = null;
+  pname = "hyprboard";
+  version = "0.0.8";
+  src = ./.;
+  vendorHash = null;
 }
